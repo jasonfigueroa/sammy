@@ -70,6 +70,10 @@ Match the established JavaScript style: two-space indentation, semicolons, singl
 
 Tests use Mocha’s BDD interface and `expect.js`. Add behavior-focused `describe`/`it` cases to the closest `*_spec.js` file. When introducing a new spec file or plugin, add its script tag to `test/index.html`. Put requestable sample data in `test/fixtures/`. Run the complete browser suite before submitting; no coverage threshold is configured.
 
+## Architecture Decisions
+
+Record significant architectural choices in `docs/decisions/` before implementation. Use the naming pattern `NNNN-short-title.md` and capture the decision's status, context, chosen approach, and consequences. Keep investigation notes and behavioral evidence in `docs/archaeology.md`.
+
 ## Commit & Pull Request Guidelines
 
 Recent history favors short, imperative summaries such as `Improve json detection` or `Fix indent`; release commits use `Pushing version X.Y.Z`. Keep each commit scoped to one logical change and mention the affected behavior. Pull requests should explain the problem and solution, link relevant issues, list browser-test results, and call out compatibility risks. Include screenshots only for changes to examples or rendered behavior. Do not commit regenerated minified bundles unless the change is explicitly preparing a release.
