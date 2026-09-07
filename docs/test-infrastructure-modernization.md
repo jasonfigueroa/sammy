@@ -103,31 +103,109 @@ not a native migration.
 - **Advantages:** Strong long-term workflow. **Disadvantages:** Prematurely
   rewrites behavioral evidence and can make a green result mean something new.
 
-## Recommendation
+## Approved Direction and Proposed Tools
 
-Start with Option A: legacy tests plus modern orchestration. Implement an exact
-root-topology server and run the existing page once, serially, in a fresh
-browser context. Capture runner pass, fail, pending, begin, and end events;
-page errors; failed requests; HTTP status by path; browser version; final URL;
-and normal completion. Do not infer success from the HTML reporter alone.
+Option A is approved. The proposed implementation uses npm, a pinned
+`puppeteer` development dependency, and Node's built-in HTTP APIs. npm fits the
+existing `package.json`, requires no additional package-manager bootstrap on
+the current Windows environment, and produces a lockfile suitable for later
+`npm ci` use. The initial pins should be Node 22.15.1, npm 10.9.2, and
+`puppeteer` 25.10.0; that Puppeteer release provisions Chrome for Testing
+152.0.7977.75, keeping the automated browser in the established Chrome 152
+major. Puppeteer is preferred over Playwright for this first step
+because the target is one Chrome run rather than a new test framework or a
+cross-browser matrix. Pinning Puppeteer and committing `package-lock.json`
+also pins its compatible Chrome for Testing revision.
 
-If approved, the first change would likely touch `package.json`, a selected
-package-manager lockfile, a browser-runner configuration, new files under
-`test/support/`, and this document. A later, separate change could add
-`.github/workflows/`. `lib/`, existing `test/*_spec.js`, fixtures, and vendored
-libraries should remain untouched. Whether the result bridge belongs in a
-small new harness script or a minimal `test/index.html` hook remains open.
+| Automation choice | Fit for this phase |
+| --- | --- |
+| Puppeteer library | **Preferred.** One Chrome-focused dependency, direct preload/evaluation and network/page-error APIs, a package-matched browser, good Windows and CI support, and easy removal. |
+| Playwright library | Equally low test-semantic risk and stronger future cross-browser support, but requires a separate browser-install step (or browser package) and adds capability this Chrome-baseline phase does not need. |
+| Selenium WebDriver | Mature and portable, with automated driver/browser management, but early-page instrumentation and network/error collection require more harness machinery and browser selection can be less visibly tied to the lockfile. |
 
-Proof requires at least two clean runs reporting exactly 380 pass events, zero
-fail events, four pending events, and one end per begun test; all fixture
-requests must succeed after pathname changes. The command must fail on count
-drift, uncaught exceptions, failed browser requests, reporter crashes, or
-abnormal completion. A clean source diff confirms the wrapper did not alter
-Sammy or its specs.
+For serving, built-in `node:http` is preferable to Express or a generic static
+server. Express adds an unnecessary dependency; generic static servers do not
+naturally express the split roots, custom MIME rules, traversal checks, and
+diagnostic request classification. All three are reversible, but the small
+purpose-built server makes the historical topology executable documentation.
 
-## Decisions Not Yet Made
+The server should bind only to `127.0.0.1` on an available port and implement
+the historical mappings directly, using no server dependency. It must reject
+path traversal, reproduce the custom fixture MIME types, serve GET and HEAD
+requests, and retain the historical 404 response for unsupported POSTs.
 
-No package manager, automation package, browser provisioning policy, result
-bridge, CI operating system, or browser matrix has been selected. Upgrading
-Mocha, expect.js, jQuery, or individual specs is deliberately deferred until
-the wrapper independently reproduces the baseline.
+### Direct Mocha observation
+
+`test/index.html` does not need to change. Before navigation, Puppeteer can
+inject an observer that registers the earliest `DOMContentLoaded` listener.
+That listener patches the already-loaded `Mocha.Runner.prototype.run` before
+jQuery's ready callback invokes `mocha.run()`. It attaches listeners directly
+to the actual Runner and records stable Test identities, `test`, `pass`,
+`fail`, `pending`, `test end`, `start`, and `end` events. A narrow wrapper of
+the legacy Runnable execution method can count actual test-body invocations.
+The observer must preserve return values, callback arguments, thrown errors,
+and event order; failure to attach before the run is itself a harness failure.
+
+This avoids reporter-DOM scraping and keeps all existing script tags in their
+current order. Puppeteer's page-error listener independently detects a
+reporter or other uncaught browser exception.
+
+### Request policy
+
+Every request and response is recorded, but not every non-success response
+fails the run. These are expected auxiliary failures when they match exactly:
+
+- `GET /favicon.ico`
+- target-window document submissions using `POST /` or `POST /?`
+
+A network failure or HTTP error is fatal for the main test document, scripts,
+stylesheets, XHR/fetch requests, `/fixtures/**`, `/lib/**`, `/vendor/**`, and
+other resources required to execute the suite. Unknown non-required failures
+are reported as diagnostics and require an explicit classification rather
+than silently expanding the allowlist. All fixture responses must succeed,
+including at least one requested after a non-root history pathname has been
+observed.
+
+### Runtime and result contract
+
+The intended command is `npm test`. It starts the server, launches the pinned
+Chrome headlessly in a new browser context, installs the observer, opens
+`/#/`, and waits
+for one normal Mocha `end`. In a `finally` block it closes the context and
+browser and stops the server. It prints the browser version, URL, event counts,
+resource diagnostics, and duration. Exit status 0 means a clean baseline;
+status 1 means a test, page, resource, count, or completion failure; status 2
+means the harness, server, or browser could not start or cleanly shut down.
+An optional `--headed` flag should support visual diagnosis; the first
+implementation should confirm 380/0/4 once in each mode before headless becomes
+the routine default.
+
+Success requires all of the following:
+
+- 380 pass events, zero fail events, four pending events, and 384 unique Test
+  objects;
+- one Runner invocation, one `start`, one `end`, and one terminal event and
+  `test end` per Test object;
+- 380 non-pending test begins and body invocations, with no duplicate body
+  execution or runner re-entry;
+- no timeout, uncaught page error, reporter/listener exception, or abnormal
+  browser/server termination;
+- no failed required resource and successful fixture requests after history
+  pathname changes; and
+- the browser version, final URL, and expected auxiliary HTTP failures are
+  present in the diagnostic summary.
+
+The first implementation is expected to modify `package.json` and this
+document and add `.node-version`, `package-lock.json`,
+`test/support/root-test-server.mjs`, `test/support/mocha-observer.mjs`, and
+`test/support/run-legacy-suite.mjs`. It should not modify `test/index.html`,
+existing specs, fixtures, `lib/`, or `vendor/`. CI configuration remains a
+separate follow-up after two consecutive clean local runs.
+
+## Deferred Decisions
+
+Upgrading Mocha, replacing expect.js, upgrading jQuery, changing discovery or
+script order, rewriting specs, changing Sammy production code, adding a
+cross-browser matrix, and adding CI are deliberately deferred. The initial
+diagnostic artifact format and overall harness timeout can be settled during
+implementation without changing the behavioral contract.
