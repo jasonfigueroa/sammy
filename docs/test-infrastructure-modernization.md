@@ -109,13 +109,13 @@ Option A is approved. The proposed implementation uses npm, a pinned
 `puppeteer` development dependency, and Node's built-in HTTP APIs. npm fits the
 existing `package.json`, requires no additional package-manager bootstrap on
 the current Windows environment, and produces a lockfile suitable for later
-`npm ci` use. The initial pins should be Node 22.15.1, npm 10.9.2, and
+`npm ci` use. The initial pins should be Node 24.20.0 LTS, npm 11.19.0, and
 `puppeteer` 25.10.0; that Puppeteer release provisions Chrome for Testing
 152.0.7977.75, keeping the automated browser in the established Chrome 152
 major. Puppeteer is preferred over Playwright for this first step
 because the target is one Chrome run rather than a new test framework or a
-cross-browser matrix. Pinning Puppeteer and committing `package-lock.json`
-also pins its compatible Chrome for Testing revision.
+cross-browser matrix. Puppeteer 25.10.0 determines the compatible Chrome for
+Testing revision that it downloads.
 
 | Automation choice | Fit for this phase |
 | --- | --- |
