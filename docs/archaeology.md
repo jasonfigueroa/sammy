@@ -90,12 +90,25 @@ Environment and directly observed results:
 - No started test body ran more than once per `test begin`, and no started test
   emitted excess `test end` events.
 - The final server log contained four auxiliary 404 responses: one
-  `GET /favicon.ico` and three target-window form submissions (`POST /`,
-  `POST /?`, and `POST /`). The historical Sinatra app also has no POST route.
-  There were no failed browser requests, uncaught exceptions, reporter
-  crashes, or duplicate failure elements.
-- All 47 observed `/fixtures/...` responses returned HTTP 200, including after
-  history tests visited `/testing`, `/push`, `/pop`, and `/`.
+  `GET /favicon.ico` and three document requests (`POST /`, `POST /?`, and
+  `POST /`). The historical Sinatra app also has no POST route. These requests
+  are observed and provisionally tolerated auxiliary traffic; their exact
+  source has not been established. There were no failed required browser
+  requests, uncaught exceptions, reporter crashes, or duplicate failure
+  elements.
+- That diagnostic run's server log contained 47 `/fixtures/...` responses,
+  all with HTTP 200, including responses observed after history tests visited
+  `/testing`, `/push`, `/pop`, and `/`.
+
+### Modern orchestration verification
+
+The Node/Puppeteer harness records two differently scoped fixture metrics. A
+final Node 24 verification recorded 49 successful `/fixtures/...` responses
+across the server and 34 fixture requests from the primary test page after its
+first non-root pathname was observed. The earlier value of 47 was the total
+from a separate historical-topology diagnostic run, not the denominator for
+the harness's 34-request counter. The instrumentation does not establish why
+the server-wide total differed by two requests between those runs.
 
 ### Interpretation and uncertainty
 

@@ -129,10 +129,10 @@ naturally express the split roots, custom MIME rules, traversal checks, and
 diagnostic request classification. All three are reversible, but the small
 purpose-built server makes the historical topology executable documentation.
 
-The server should bind only to `127.0.0.1` on an available port and implement
-the historical mappings directly, using no server dependency. It must reject
-path traversal, reproduce the custom fixture MIME types, serve GET and HEAD
-requests, and retain the historical 404 response for unsupported POSTs.
+The server binds only to `127.0.0.1` on an available port and implements the
+historical mappings directly, using no server dependency. It rejects path
+traversal, reproduces the custom fixture MIME types, serves GET and HEAD
+requests, and preserves the historical server's lack of POST routes.
 
 ### Direct Mocha observation
 
@@ -153,10 +153,16 @@ reporter or other uncaught browser exception.
 ### Request policy
 
 Every request and response is recorded, but not every non-success response
-fails the run. These are expected auxiliary failures when they match exactly:
+fails the run. These observed requests are provisionally tolerated auxiliary
+traffic when they match exactly:
 
 - `GET /favicon.ico`
-- target-window document submissions using `POST /` or `POST /?`
+- document requests using `POST /` or `POST /?`
+
+The historical server naturally returns 404 for these unsupported POSTs, and
+they do not prevent a valid 380/0/4 run. Their exact origin has not been
+established, so they are not treated as required legacy behavior or attributed
+to a specific test.
 
 A network failure or HTTP error is fatal for the main test document, scripts,
 stylesheets, XHR/fetch requests, `/fixtures/**`, `/lib/**`, `/vendor/**`, and
@@ -192,8 +198,8 @@ Success requires all of the following:
   browser/server termination;
 - no failed required resource and successful fixture requests after history
   pathname changes; and
-- the browser version, final URL, and expected auxiliary HTTP failures are
-  present in the diagnostic summary.
+- the browser version, final URL, and provisionally tolerated auxiliary HTTP
+  failures are present in the diagnostic summary.
 
 The first implementation is expected to modify `package.json` and this
 document and add `.node-version`, `package-lock.json`,
