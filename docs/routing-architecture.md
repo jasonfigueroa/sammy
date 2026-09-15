@@ -581,7 +581,7 @@ caller parameter precedence and caller-object mutation, the distinct shallow
 copy used for `EventContext.params`, and async `next()` timing relative to
 `event-context-after` and `onComplete`. These tests protect observed behavior;
 they do not endorse it. **Covered by tests:**
-[`test/application_spec.js`](../test/application_spec.js#L718-L788) and
+[`test/application_spec.js`](../test/application_spec.js#L712-L807) and
 [`test/event_context_spec.js`](../test/event_context_spec.js#L27-L41).
 
 1. String-route regex semantics and precedence questions beyond identical

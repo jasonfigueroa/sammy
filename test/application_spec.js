@@ -613,18 +613,12 @@ describe('Application', function() {
     });
 
     describe('#runRoute()', function() {
-      var bound_after_listener;
-
       beforeEach(function() {
         context = this;
         app = new Sammy.Application(function() {});
-        bound_after_listener = null;
       });
 
       afterEach(function() {
-        if (bound_after_listener) {
-          app._unlisten('event-context-after', bound_after_listener);
-        }
         app.unload();
       });
 
@@ -753,15 +747,21 @@ describe('Application', function() {
       });
 
       it('fires after before an asynchronously continued route completes', function(done) {
-        var observations = [];
+        var observations = [],
+            location = '#/characterization-async-setup',
+            original_bind = $.fn.bind;
 
         app.element_selector = '#main';
+        app.setLocationProxy({
+          bind: function() {},
+          unbind: function() {},
+          getLocation: function() { return location; },
+          setLocation: function(new_location) { location = new_location; }
+        });
         app.after(function() {
           observations.push('after');
         });
-        bound_after_listener = app.listeners['event-context-after'][0];
-        app._listen('event-context-after', bound_after_listener);
-
+        app.get('#/characterization-async-setup', function() {});
         app.get('#/characterization-async', function(context, next) {
           observations.push('first callback');
           setTimeout(function() {
@@ -774,15 +774,34 @@ describe('Application', function() {
         });
         app.onComplete(function() {
           observations.push('onComplete');
-          expect(observations).to.eql([
-            'first callback',
-            'after',
-            'deferred continuation',
-            'later callback',
-            'onComplete'
-          ]);
+          try {
+            expect(observations).to.eql([
+              'first callback',
+              'after',
+              'deferred continuation',
+              'later callback',
+              'onComplete'
+            ]);
+          } catch (error) {
+            app.unload();
+            return done(error);
+          }
+          app.unload();
           done();
         });
+
+        // Keep the focused test from retaining run()'s unnamespaced window
+        // unload handler while allowing all application listeners to bind.
+        $.fn.bind = function(name) {
+          if (this[0] === window && name === 'unload') { return this; }
+          return original_bind.apply(this, arguments);
+        };
+        try {
+          app.run();
+        } finally {
+          $.fn.bind = original_bind;
+        }
+        observations = [];
 
         app.runRoute('get', '#/characterization-async');
       });
