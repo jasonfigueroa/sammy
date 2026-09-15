@@ -60,6 +60,17 @@ This will guarantee that the DOM is loaded before we try to apply functionality 
 Sammy requires jQuery >= 1.4.1
 Get it from: [http://jquery.com](http://jquery.com)
 
+## Browser Compatibility
+
+The modernization targets bounded, moving support windows for current desktop
+Chrome, Edge, Firefox, and Safari releases. Target support is a policy boundary,
+not a claim that every browser is already verified; the authoritative automated
+suite currently runs only in a pinned Chrome for Testing version. Mobile and
+legacy browsers are not currently targeted. See the
+[browser compatibility policy](docs/browser-compatibility.md) and
+[accepted decision](docs/decisions/0001-browser-support-policy.md) for exact
+windows, evidence, and limitations.
+
 ## More!
 
 ### Learn!
