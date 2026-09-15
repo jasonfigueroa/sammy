@@ -212,6 +212,13 @@ document and add `.node-version`, `package-lock.json`,
 existing specs, fixtures, `lib/`, or `vendor/`. CI configuration remains a
 separate follow-up after two consecutive clean local runs.
 
+For cross-browser evidence gathering, the diagnostic observation mode
+`npm test -- --observe-counts` suppresses only the exact 387/0/4/391
+comparison. It still requires a normally completed, structurally valid run
+and retains page, request, duplicate-execution, and runner re-entry
+diagnostics. This mode is not a replacement for the strict Chrome `npm test`
+regression contract.
+
 ## Deferred Decisions
 
 Upgrading Mocha, replacing expect.js, upgrading jQuery, changing discovery or

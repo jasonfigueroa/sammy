@@ -64,9 +64,10 @@ before characterization tests remains 380 passing, 0 failing, and 4 pending.
 [`docs/test-infrastructure-modernization.md`](test-infrastructure-modernization.md#approved-direction-and-proposed-tools).
 
 The runner loads vendored jQuery 1.7.2, Mocha 1.0.1, expect.js, core Sammy, and
-19 of the 26 first-party plugins in explicit order. Chrome is the only browser
-currently automated. No Firefox, Edge, Safari, mobile-browser, or other
-platform result is recorded as part of the authoritative harness. **Observed:**
+19 of the 26 first-party plugins in explicit order. Pinned Chrome for Testing
+is the only browser currently enforced as an automated regression gate.
+Cross-browser baseline runs are recorded below but are not additional gates.
+**Observed:**
 [`test/index.html`](../test/index.html#L8-L92) and
 [`docs/jquery-dependency-inventory.md`](jquery-dependency-inventory.md#plugin-dependency-matrix).
 
@@ -75,6 +76,99 @@ describes this as a way to make automated results deterministic and
 reproducible. The pin is therefore valuable baseline evidence, but it must be
 refreshed deliberately if it is to remain inside a moving support window.
 [Chrome for Testing](https://developer.chrome.com/docs/automation-and-testing/chrome-for-testing/)
+
+## Observed Cross-Browser Baseline
+
+The following runs were recorded on 2026-09-15 on Windows 10 IoT Enterprise
+LTSC 2021 21H2 (build 19044.7725). They used the unchanged suite, jQuery 1.7.2,
+the historical root-serving topology, a fresh headless browser context, and
+the repository-pinned Node 24.20.0 and npm 11.19.0. The official Windows x64
+Node archive was verified against its published SHA-256 manifest before use.
+Earlier Node 22.15.1/npm 10.9.2 observations were preliminary and are not the
+final baseline recorded here.
+
+Chrome and Edge were controlled by Puppeteer over the Chrome DevTools
+Protocol. Firefox was controlled by Puppeteer's WebDriver BiDi support. The
+strict `npm test` path continued to require exactly 387 passing, 0 failing, 4
+pending, and 391 unique tests. The diagnostic `--observe-counts` mode used for
+Firefox disabled only that exact-count comparison: normal Mocha completion,
+single execution, page/resource diagnostics, and other structural checks
+remained required.
+
+### Browser selection and reproduction
+
+Puppeteer's ordinary `launch()` call reads `PUPPETEER_BROWSER` and
+`PUPPETEER_EXECUTABLE_PATH`. The following PowerShell setup was used so npm
+and the child `node` command both resolved to the pinned runtime:
+
+```powershell
+$nodeRoot = "$env:USERPROFILE\.cache\sammy-toolchains\node-v24.20.0-win-x64"
+$env:Path = "$nodeRoot;$env:Path"
+& "$nodeRoot\node.exe" --version # v24.20.0
+& "$nodeRoot\npm.cmd" --version  # 11.19.0
+```
+
+Each browser was then selected as follows. The system browser paths and
+Puppeteer cache paths are the exact locations used for this observation;
+installations on another machine may differ.
+
+| Browser | Selection | Command |
+| --- | --- | --- |
+| Chrome for Testing 152.0.7977.75 | Remove both Puppeteer environment overrides; Puppeteer uses its package-pinned browser. | `& "$nodeRoot\npm.cmd" test` |
+| Chrome Stable 152.0.7977.83 | Set `PUPPETEER_EXECUTABLE_PATH` to `C:\Program Files\Google\Chrome\Application\chrome.exe`; remove `PUPPETEER_BROWSER`. | `& "$nodeRoot\npm.cmd" test` |
+| Edge Stable 153.0.4234.32 | Set `PUPPETEER_EXECUTABLE_PATH` to `C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe`; remove `PUPPETEER_BROWSER`. | `& "$nodeRoot\npm.cmd" test` |
+| Firefox Stable 156.0 | Set `PUPPETEER_BROWSER=firefox` and `PUPPETEER_EXECUTABLE_PATH` to `$env:USERPROFILE\.cache\puppeteer\firefox\win64-stable_156.0\core\firefox.exe`. | `& "$nodeRoot\npm.cmd" test -- --observe-counts` |
+| Firefox ESR 140.16.0esr | Set `PUPPETEER_BROWSER=firefox` and `PUPPETEER_EXECUTABLE_PATH` to `$env:USERPROFILE\.cache\puppeteer\firefox\win64-esr_140.16.0esr\core\firefox.exe`. | `& "$nodeRoot\npm.cmd" test -- --observe-counts` |
+
+| Browser | Repetitions | Classification | Observed result |
+| --- | ---: | --- | --- |
+| Chrome for Testing 152.0.7977.75 | 1 reconfirmation | Observed passing; automated gate | 387 passing, 0 failing, 4 pending, and 391 unique tests; clean completion. |
+| Google Chrome Stable 152.0.7977.83 | 2 | Observed passing | Both runs produced 387/0/4 across 391 unique tests with clean completion. |
+| Microsoft Edge Stable 153.0.4234.32 | 2 | Observed unstable | One run completed at 387/0/4 across 391 tests; one failed to complete after an asynchronous partial-rendering timeout. |
+| Mozilla Firefox Stable 156.0 | 2 | Observed failing and unstable | Neither run completed; the first timeout occurred in different asynchronous tests. |
+| Mozilla Firefox ESR 140.16.0esr | 2 | Observed failing/incomplete | Neither run completed; both first failed at the same `EventContext #partial()` timeout. |
+| Apple Safari on macOS | 0 | Unavailable | No Apple environment was available; real Safari remains an explicit verification gap. |
+
+### Edge evidence and limits
+
+One Edge run completed normally at 387/0/4 across 391 unique tests. The other
+first failed at `EventContext #partial() rendering with partials renders
+partials with callback but without data` after its two-second timeout. At the
+harness timeout that incomplete run had 145 pass events, 14 fail events, 4
+pending events, and 161 observed Test objects. No required resource failed;
+later failures cascaded and the legacy HTML reporter threw while rendering
+them. Two preliminary Node 22 runs completed cleanly, which reinforces the
+classification as **observed unstable** rather than observed incompatible.
+Root cause remains unresolved and is tracked in
+[issue #22](https://github.com/jasonfigueroa/sammy/issues/22).
+
+### Firefox evidence and limits
+
+Both ESR runs and one Stable run first failed at `EventContext #partial()
+passes the contents to the callback`: Mocha's four-second timeout expired
+although `GET /fixtures/partial.html` returned HTTP 200 and no required
+resource request failed. Their common harness-timeout snapshot contained 135
+pass events, 24 fail events, 4 pending events, and 161 observed Test objects.
+The other Stable run failed earlier at `Application Sammy.Application
+#runRoute() passes to multiple chained callbacks`, with a partial snapshot of
+134 pass, 25 fail, and 4 pending events.
+
+These are partial counts from interrupted runs, not Firefox suite totals. All
+four runs later produced secondary failures, and Mocha 1.0.1's HTML reporter
+threw while rendering them. The controlled page recorded one `Runner.run()`;
+no runner re-entry was observed there before reporter corruption. Both
+channels are therefore observed failing/incomplete, while Stable is also
+**observed unstable** in its first failure.
+
+The automation transport originally exposed a separate harness limitation:
+Puppeteer's Firefox request object does not implement `resourceType()`. The
+harness now falls back to navigation and URL-path classification for that
+case. Once corrected, the Sammy/Mocha failure above remained reproducible.
+The evidence therefore should not be dismissed as that inspection error, but
+it also does not establish the root cause of the Firefox behavior. Production
+code, specs, fixtures, vendored dependencies, and `test/index.html` were not
+changed. Root cause remains unresolved and is tracked in
+[issue #21](https://github.com/jasonfigueroa/sammy/issues/21).
 
 ## Current Browser Release Policies
 
@@ -143,9 +237,12 @@ not permanent policy.
 | Environment | Status under the accepted target | Automated verification | Observed compatibility |
 | --- | --- | --- | --- |
 | Chrome for Testing 152.0.7977.75 | Inside the accepted Chrome window as of 2026-09-15. | Yes, through `npm test`. | 387 passing, 0 failing, 4 pending, 391 unique tests. |
-| Current/previous branded Chrome and current Extended Stable | Targeted. | No. | No repository-backed result recorded. |
-| Edge Stable / Extended Stable | Targeted. | No. | No repository-backed result recorded. |
-| Firefox Stable / ESR | Targeted. | No. | No repository-backed result recorded. |
+| Chrome Stable 152.0.7977.83 | Targeted. | No; ad hoc baseline only. | Two clean 387/0/4 runs across 391 unique tests. |
+| Other targeted Chrome Stable versions and Extended Stable | Targeted. | No. | No repository-backed result recorded. |
+| Edge Stable 153.0.4234.32 | Targeted. | No; ad hoc baseline only. | Observed unstable: one clean 387/0/4 run and one incomplete run after an asynchronous timeout. |
+| Other targeted Edge Stable versions and Extended Stable | Targeted. | No. | No repository-backed result recorded. |
+| Firefox Stable 156.0 / ESR 140.16.0esr | Targeted. | No; ad hoc baseline only. | Both channels failed to complete; Stable's first timeout varied, while ESR's repeated. No valid final counts. |
+| Other targeted Firefox Stable / ESR versions | Targeted. | No. | No repository-backed result recorded. |
 | Safari on macOS | Targeted. | No. | No repository-backed result recorded. |
 | Playwright WebKit | Supplementary evidence only. | No. | No repository-backed result recorded. |
 
