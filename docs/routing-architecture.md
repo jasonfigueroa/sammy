@@ -576,18 +576,24 @@ GET forms join this path by changing location. Non-GET forms enter at
 Candidates are prioritized by compatibility sensitivity, not by presumed
 incorrectness:
 
-1. String-route regex semantics and definition-order precedence for overlapping
+Issue #8 now covers first-match precedence for identical routes, path/query/
+caller parameter precedence and caller-object mutation, the distinct shallow
+copy used for `EventContext.params`, and async `next()` timing relative to
+`event-context-after` and `onComplete`. These tests protect observed behavior;
+they do not endorse it. **Covered by tests:**
+[`test/application_spec.js`](../test/application_spec.js#L718-L788) and
+[`test/event_context_spec.js`](../test/event_context_spec.js#L27-L41).
+
+1. String-route regex semantics and precedence questions beyond identical
    routes.
 2. Stateful caller-supplied `RegExp` matching and capture extraction.
-3. Parameter collision precedence and mutation of caller-supplied parameters.
-4. Async `next()` ordering relative to `event-context-after` and `onComplete`.
-5. Synchronous errors before and during the route-execution boundary, contrasted
+3. Synchronous errors before and during the route-execution boundary, contrasted
    with errors after asynchronous continuation.
-6. Around-filter nesting, short-circuiting, and return propagation.
-7. GET versus non-GET form target propagation into `EventContext`.
-8. Arbitrary registered verbs and normalization of direct `runRoute()` verbs.
-9. `contextMatchesOptions()` mutation and stateful-regex behavior.
-10. Declared but non-emitted `lookup-route` behavior, if consumer evidence makes
+4. Around-filter nesting, short-circuiting, and return propagation.
+5. GET versus non-GET form target propagation into `EventContext`.
+6. Arbitrary registered verbs and normalization of direct `runRoute()` verbs.
+7. `contextMatchesOptions()` mutation and stateful-regex behavior.
+8. Declared but non-emitted `lookup-route` behavior, if consumer evidence makes
     it a meaningful contract.
 
 Issue #5 records these gaps but does not add the tests. Targeted protection

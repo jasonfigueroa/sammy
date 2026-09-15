@@ -9,6 +9,21 @@ The trustworthy modern-browser legacy baseline is:
 This baseline was established in Chrome 152 using a server topology equivalent
 to Sammy's original `test/test_server`.
 
+## Post-Baseline Characterization Suite
+
+Issue #8 adds seven focused tests without changing the production source. They
+cover ordinary restart, identical-route definition order, parameter precedence
+and caller mutation, shallow `EventContext.params` copying, async callback
+timing, and the jQuery collection boundary exposed by application and event
+contexts.
+
+The augmented suite contains 387 passing tests, zero failures, four pending
+tests, and 391 unique Test objects. These counts describe the current suite;
+they do not replace the untouched 380/0/4 legacy baseline above. The modern
+harness continues to reject duplicate execution, runner re-entry, page errors,
+and failed required resources. Two consecutive headless runs in
+Chrome 152.0.7977.75 completed with this result and exit code 0.
+
 ## Initial Test Run — Incorrect Serving Topology
 
 Environment:

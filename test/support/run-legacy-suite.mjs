@@ -3,14 +3,17 @@ import puppeteer from 'puppeteer';
 import { installMochaObserver } from './mocha-observer.mjs';
 import { startRootTestServer } from './root-test-server.mjs';
 
+// These counts describe the current suite, including post-baseline
+// characterization tests. The untouched legacy baseline remains documented in
+// docs/archaeology.md.
 const EXPECTED = {
-  bodyRuns: 380,
-  ends: 384,
+  bodyRuns: 387,
+  ends: 391,
   fails: 0,
-  passes: 380,
+  passes: 387,
   pending: 4,
-  starts: 380,
-  tests: 384
+  starts: 387,
+  tests: 391
 };
 const RUN_TIMEOUT_MS = 60_000;
 
