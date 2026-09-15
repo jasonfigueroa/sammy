@@ -442,11 +442,17 @@ These are constraints and evidence, not a proposed migration sequence.
 These candidates are limited to jQuery semantics that materially affect an
 observable Sammy boundary:
 
+Issue #8 now verifies that `Application.$element()` and
+`EventContext.$element()` expose the expected jQuery collection shape,
+selection, length, and indexed element. This protects the current public
+boundary without asserting a specific jQuery version. **Covered by tests:**
+[`test/application_spec.js`](../test/application_spec.js#L1373-L1379) and
+[`test/event_context_spec.js`](../test/event_context_spec.js#L43-L58).
+
 - namespaced application-event isolation and cleanup across multiple apps;
 - delegated link/form handling, prior `preventDefault()`, modifier keys, target
   windows, and dynamically inserted forms;
 - `DataLocationProxy` data/event ordering and notification cleanup;
-- `Application.$element()` and `EventContext.$element()` return behavior;
 - `RenderContext.load()` with jQuery inputs, including `clone: false`;
 - caller AJAX options passed through `RenderContext.load()`;
 - form serialization cases that alter route parameter values;

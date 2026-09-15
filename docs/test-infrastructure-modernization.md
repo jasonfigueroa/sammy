@@ -7,6 +7,10 @@ decision and does not authorize dependency installation or test migration.
 
 - The authoritative Chrome 152 baseline is 380 passing, 0 failing, and 4
   pending from a fresh browser context. Production source is unchanged.
+- That 380/0/4 result remains the untouched legacy baseline. The executable
+  harness now validates the augmented current suite, including post-baseline
+  characterization tests, at 387 passing, 0 failing, 4 pending, and 391 unique
+  Test objects.
 - Correct behavior depends on the historical root topology: `/` serves
   `test/index.html`; test specs and `/fixtures/` come from `test/`; and
   `/lib/` and `/vendor/` come from their repository directories.
@@ -186,13 +190,13 @@ An optional `--headed` flag should support visual diagnosis; the first
 implementation should confirm 380/0/4 once in each mode before headless becomes
 the routine default.
 
-Success requires all of the following:
+Success for the augmented current suite requires all of the following:
 
-- 380 pass events, zero fail events, four pending events, and 384 unique Test
+- 387 pass events, zero fail events, four pending events, and 391 unique Test
   objects;
 - one Runner invocation, one `start`, one `end`, and one terminal event and
   `test end` per Test object;
-- 380 non-pending test begins and body invocations, with no duplicate body
+- 387 non-pending test begins and body invocations, with no duplicate body
   execution or runner re-entry;
 - no timeout, uncaught page error, reporter/listener exception, or abnormal
   browser/server termination;

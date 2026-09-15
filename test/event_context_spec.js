@@ -23,6 +23,37 @@ describe('EventContext', function() {
     it('sets the params', function() {
       expect(context.params).to.eql(new Sammy.Object({test: 'hooray'}));
     });
+
+    it('shallow-copies params into a distinct container', function() {
+      var nested = {value: 'shared'},
+          params = {nested: nested, top_level: 'original'},
+          copied_context = new Sammy.EventContext(app, 'get', '#/copy', params);
+
+      expect(copied_context.params === params).to.be(false);
+      expect(copied_context.params.nested === nested).to.be(true);
+
+      copied_context.params.top_level = 'changed';
+      copied_context.params.nested.value = 'changed';
+
+      expect(params.top_level).to.eql('original');
+      expect(params.nested.value).to.eql('changed');
+    });
+  });
+
+  describe('#$element()', function() {
+    afterEach(function() {
+      $('#main').html('');
+    });
+
+    it('returns the app jQuery collection for a descendant selector', function() {
+      $('#main').html('<div class="characterization-marker">marker</div>');
+
+      var element = context.$element('.characterization-marker');
+
+      expect(element.jquery).to.be.a('string');
+      expect(element.length).to.eql(1);
+      expect(element[0]).to.eql($('#main .characterization-marker')[0]);
+    });
   });
 
   describe('#redirect()', function() {

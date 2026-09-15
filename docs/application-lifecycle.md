@@ -453,15 +453,20 @@ partially protected by the existing suite.
 Priority should go to behavior spanning lifecycle transitions rather than
 behavior already exercised within a single running period:
 
+Issue #8 now covers an ordinary restart after the initial `run()` completes:
+the registered route remains available and executes once during each run. This
+does not resolve the unusual initial-dispatch case or listener accumulation.
+**Covered by test:**
+[`test/application_spec.js`](../test/application_spec.js#L316-L350).
+
 1. Calling `unload()` during initial route dispatch before `run()` returns.
-2. Restart after `unload()`, including route response and state retention.
-3. Internal listener accumulation across repeated restart cycles.
-4. Window `unload` handler accumulation across repeated restart cycles.
-5. Removal of unrelated submit handlers during `unload()`.
-6. `run` event ordering relative to `_running` and listener registration.
-7. Location-proxy replacement before startup and while running.
-8. Default-proxy restart behavior without native hash-change support.
-9. Behavior of externally retained references after `destroy()`.
+2. Internal listener accumulation across repeated restart cycles.
+3. Window `unload` handler accumulation across repeated restart cycles.
+4. Removal of unrelated submit handlers during `unload()`.
+5. `run` event ordering relative to `_running` and listener registration.
+6. Location-proxy replacement before startup and while running.
+7. Default-proxy restart behavior without native hash-change support.
+8. Behavior of externally retained references after `destroy()`.
 
 These candidates record uncertainty or unprotected behavior; they do not imply
 that the current implementation is defective.

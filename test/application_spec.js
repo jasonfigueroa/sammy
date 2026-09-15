@@ -313,6 +313,42 @@ describe('Application', function() {
         app.run('#/');
       });
 
+      it('runs a retained route once after an ordinary restart', function() {
+        var route_runs = 0,
+            location = '#/characterization-restart',
+            original_bind = $.fn.bind;
+
+        app.setLocationProxy({
+          bind: function() {},
+          unbind: function() {},
+          getLocation: function() { return location; },
+          setLocation: function(new_location) { location = new_location; }
+        });
+
+        app.get('#/characterization-restart', function() {
+          route_runs += 1;
+        });
+
+        // Keep this route-focused test from adding the unnamespaced window
+        // unload handlers whose accumulation is a separate candidate.
+        $.fn.bind = function(name) {
+          if (this[0] === window && name === 'unload') { return this; }
+          return original_bind.apply(this, arguments);
+        };
+
+        try {
+          app.run();
+          expect(route_runs).to.eql(1);
+
+          app.unload();
+          app.run();
+          expect(route_runs).to.eql(2);
+        } finally {
+          app.unload();
+          $.fn.bind = original_bind;
+        }
+      });
+
       it('ignores links that target other windows', function() {
         var captured = false;
         app.get('#/', function() {});
@@ -582,6 +618,10 @@ describe('Application', function() {
         app = new Sammy.Application(function() {});
       });
 
+      afterEach(function() {
+        app.unload();
+      });
+
       it('sets named params from a string route', function(done) {
         app.get('#/boosh/:test/:test2', function() {
           expect(this.params.test).to.eql('blurgh');
@@ -667,6 +707,103 @@ describe('Application', function() {
           done();
         });
         app.runRoute('get', '#/message/hello there');
+      });
+
+      it('uses the first matching route in definition order', function() {
+        var callbacks = [];
+
+        app.get('#/same-route', function() {
+          callbacks.push('first');
+        });
+        app.get('#/same-route', function() {
+          callbacks.push('second');
+        });
+
+        app.runRoute('get', '#/same-route');
+
+        expect(callbacks).to.eql(['first']);
+      });
+
+      it('applies parameter precedence while mutating caller params', function() {
+        var params = {
+          caller_only: 'caller',
+          id: 'caller',
+          query_only: 'caller'
+        };
+
+        app.get('#/parameters/:id', function() {
+          expect(this.params.id).to.eql('path');
+          expect(this.params.query_only).to.eql('query');
+          expect(this.params.caller_only).to.eql('caller');
+        });
+
+        app.runRoute('get', '#/parameters/path?id=query&query_only=query', params);
+
+        expect(params).to.eql({
+          caller_only: 'caller',
+          id: 'path',
+          query_only: 'query'
+        });
+      });
+
+      it('fires after before an asynchronously continued route completes', function(done) {
+        var observations = [],
+            location = '#/characterization-async-setup',
+            original_bind = $.fn.bind;
+
+        app.element_selector = '#main';
+        app.setLocationProxy({
+          bind: function() {},
+          unbind: function() {},
+          getLocation: function() { return location; },
+          setLocation: function(new_location) { location = new_location; }
+        });
+        app.after(function() {
+          observations.push('after');
+        });
+        app.get('#/characterization-async-setup', function() {});
+        app.get('#/characterization-async', function(context, next) {
+          observations.push('first callback');
+          setTimeout(function() {
+            observations.push('deferred continuation');
+            next();
+          }, 0);
+        }, function(context, next) {
+          observations.push('later callback');
+          next();
+        });
+        app.onComplete(function() {
+          observations.push('onComplete');
+          try {
+            expect(observations).to.eql([
+              'first callback',
+              'after',
+              'deferred continuation',
+              'later callback',
+              'onComplete'
+            ]);
+          } catch (error) {
+            app.unload();
+            return done(error);
+          }
+          app.unload();
+          done();
+        });
+
+        // Keep the focused test from retaining run()'s unnamespaced window
+        // unload handler while allowing all application listeners to bind.
+        $.fn.bind = function(name) {
+          if (this[0] === window && name === 'unload') { return this; }
+          return original_bind.apply(this, arguments);
+        };
+        try {
+          app.run();
+        } finally {
+          $.fn.bind = original_bind;
+        }
+        observations = [];
+
+        app.runRoute('get', '#/characterization-async');
       });
 
       it('raises an error when route cannot be found', function(done) {
@@ -1238,6 +1375,11 @@ describe('Application', function() {
         });
       });
 
+      afterEach(function() {
+        app.unload();
+        $('#main').html('');
+      });
+
       it('accepts an element selector', function() {
         $('#main').html('<div class="abc">hello there</div>');
         expect(app.$element('.abc').html()).to.eql('hello there');
@@ -1245,6 +1387,14 @@ describe('Application', function() {
 
       it('returns the app element if no selector is given', function() {
         expect(app.$element().attr('id')).to.eql('main');
+      });
+
+      it('returns a jQuery collection for the selected app element', function() {
+        var element = app.$element();
+
+        expect(element.jquery).to.be.a('string');
+        expect(element.length).to.eql(1);
+        expect(element[0]).to.eql($('#main')[0]);
       });
     });
 
