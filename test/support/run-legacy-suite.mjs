@@ -47,7 +47,15 @@ function isRequiredServerRequest(request) {
 function isRequiredBrowserRequest(request, mainPage) {
   const url = new URL(request.url());
   const pathname = url.pathname;
-  const type = request.resourceType();
+  let type = null;
+
+  try {
+    type = request.resourceType();
+  } catch (error) {
+    if (error.name !== 'UnsupportedOperation') {
+      throw error;
+    }
+  }
 
   if (request.isNavigationRequest() && request.frame() === mainPage.mainFrame()) {
     return true;
@@ -59,7 +67,7 @@ function isRequiredBrowserRequest(request, mainPage) {
     ['fetch', 'script', 'stylesheet', 'xhr'].includes(type);
 }
 
-function inspectResults(state) {
+function inspectResults(state, enforceExpectedCounts) {
   const failures = [];
   const tests = Object.values(state.tests);
   const counts = {
@@ -72,9 +80,11 @@ function inspectResults(state) {
     tests: tests.length
   };
 
-  for (const [name, expected] of Object.entries(EXPECTED)) {
-    if (counts[name] !== expected) {
-      failures.push(`expected ${expected} ${name}, observed ${counts[name]}`);
+  if (enforceExpectedCounts) {
+    for (const [name, expected] of Object.entries(EXPECTED)) {
+      if (counts[name] !== expected) {
+        failures.push(`expected ${expected} ${name}, observed ${counts[name]}`);
+      }
     }
   }
 
@@ -124,6 +134,8 @@ async function waitForMochaCompletion(page) {
 
 async function run() {
   const headed = process.argv.includes('--headed');
+  const enforceExpectedCounts = !process.argv.includes('--observe-counts');
+  const browserConsole = [];
   const failedRequiredRequests = [];
   const pageErrors = [];
   const visitedPaths = [];
@@ -145,6 +157,12 @@ async function run() {
     phase = 'creating browser page';
     page = await context.newPage();
 
+    page.on('console', (message) => {
+      browserConsole.push({
+        text: message.text(),
+        type: message.type()
+      });
+    });
     page.on('error', (error) => {
       pageErrors.push({ message: error.message, stack: error.stack });
     });
@@ -196,7 +214,7 @@ async function run() {
 
     phase = 'validating results';
     const state = await page.evaluate(() => window.__sammyLegacyTestState);
-    const { counts, failures } = inspectResults(state);
+    const { counts, failures } = inspectResults(state, enforceExpectedCounts);
     const auxiliaryRequests = server.requests.filter(isExpectedAuxiliaryRequest);
     const unexpectedServerErrors = server.requests.filter((request) =>
       request.status >= 400 && !isExpectedAuxiliaryRequest(request)
@@ -219,6 +237,8 @@ async function run() {
     const summary = {
       auxiliaryHttpFailures: auxiliaryRequests.map((request) => requestKey(request.method, request.url)),
       browser: await browser.version(),
+      browserConsoleCount: browserConsole.length,
+      countPolicy: enforceExpectedCounts ? 'strict' : 'observed',
       counts,
       durationMs: Date.now() - startedAt,
       failedRequiredRequests,
@@ -231,6 +251,12 @@ async function run() {
       unexpectedHttpFailures: unexpectedServerErrors.map((request) => requestKey(request.method, request.url)),
       visitedPaths: [...new Set(visitedPaths)]
     };
+
+    if (failures.length) {
+      summary.browserConsole = browserConsole.filter((message) =>
+        message.type === 'error' || message.type === 'warn'
+      );
+    }
 
     console.log(JSON.stringify(summary, null, 2));
 
@@ -248,28 +274,75 @@ async function run() {
         const diagnosticState = await page.evaluate(() => {
           const current = window.__sammyLegacyTestState;
           if (!current) return null;
+          const tests = Object.values(current.tests);
+          const firstFailure = current.events.find((event) => event.type === 'fail');
           return {
             attached: current.attached,
             attachmentError: current.attachmentError,
+            counts: {
+              bodyRuns: tests.reduce((sum, test) => sum + test.bodyRuns, 0),
+              ends: current.events.filter((event) => event.type === 'test end').length,
+              fails: current.events.filter((event) => event.type === 'fail').length,
+              passes: current.events.filter((event) => event.type === 'pass').length,
+              pending: current.events.filter((event) => event.type === 'pending').length,
+              starts: current.events.filter((event) => event.type === 'test').length,
+              tests: tests.length
+            },
             callbackFailures: current.callbackFailures,
             callbackInvoked: current.callbackInvoked,
             completed: current.completed,
             eventCount: current.events.length,
-            lastEvents: current.events.slice(-10),
+            firstFailure: firstFailure ? {
+              ...firstFailure,
+              fullTitle: current.tests[firstFailure.testId]?.fullTitle || null
+            } : null,
+            lastEvents: current.events.slice(-10).map((event) => ({
+              error: event.error ? { message: event.error.message } : null,
+              fullTitle: current.tests[event.testId]?.fullTitle || null,
+              location: event.location,
+              sequence: event.sequence,
+              testId: event.testId,
+              timestamp: event.timestamp,
+              type: event.type
+            })),
             runnerRuns: current.runnerRuns,
             testCount: Object.keys(current.tests).length
           };
         });
         console.error(JSON.stringify({
+          browser: browser ? await browser.version() : null,
+          browserConsole: browserConsole.filter((message) =>
+            message.type === 'error' || message.type === 'warn'
+          ),
+          browserConsoleCount: browserConsole.length,
+          failedRequiredRequests,
+          pageErrors,
           pageUrl: page.url(),
-          state: diagnosticState
+          state: diagnosticState,
+          visitedPaths: [...new Set(visitedPaths)]
         }, null, 2));
       } catch (diagnosticError) {
         console.error(`Could not read page diagnostics: ${diagnosticError.message}`);
       }
     }
     if (server) {
-      console.error(JSON.stringify({ serverRequests: server.requests }, null, 2));
+      const rootDocuments = server.requests.filter((request) =>
+        request.method === 'GET' && new URL(request.url, server.origin).pathname === '/'
+      );
+      const fixtureRequests = server.requests.filter((request) =>
+        new URL(request.url, server.origin).pathname.startsWith('/fixtures/')
+      );
+      const failedServerRequests = server.requests.filter((request) => request.status >= 400);
+      console.error(JSON.stringify({
+        serverSummary: {
+          failedRequests: failedServerRequests.map((request) =>
+            requestKey(request.method, request.url)
+          ),
+          fixtureRequests: fixtureRequests.length,
+          requests: server.requests.length,
+          rootDocumentRequests: rootDocuments.length
+        }
+      }, null, 2));
     }
     process.exitCode = phase === 'navigating to the test page' ||
       phase === 'waiting for Mocha completion' ? 1 : 2;

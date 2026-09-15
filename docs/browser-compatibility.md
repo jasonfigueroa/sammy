@@ -64,9 +64,10 @@ before characterization tests remains 380 passing, 0 failing, and 4 pending.
 [`docs/test-infrastructure-modernization.md`](test-infrastructure-modernization.md#approved-direction-and-proposed-tools).
 
 The runner loads vendored jQuery 1.7.2, Mocha 1.0.1, expect.js, core Sammy, and
-19 of the 26 first-party plugins in explicit order. Chrome is the only browser
-currently automated. No Firefox, Edge, Safari, mobile-browser, or other
-platform result is recorded as part of the authoritative harness. **Observed:**
+19 of the 26 first-party plugins in explicit order. Pinned Chrome for Testing
+is the only browser currently enforced as an automated regression gate.
+Cross-browser baseline runs are recorded below but are not additional gates.
+**Observed:**
 [`test/index.html`](../test/index.html#L8-L92) and
 [`docs/jquery-dependency-inventory.md`](jquery-dependency-inventory.md#plugin-dependency-matrix).
 
@@ -75,6 +76,57 @@ describes this as a way to make automated results deterministic and
 reproducible. The pin is therefore valuable baseline evidence, but it must be
 refreshed deliberately if it is to remain inside a moving support window.
 [Chrome for Testing](https://developer.chrome.com/docs/automation-and-testing/chrome-for-testing/)
+
+## Observed Cross-Browser Baseline
+
+The following runs were recorded on 2026-09-15 on Windows 10 IoT Enterprise
+LTSC 2021 21H2 (build 19044.7725). They used the unchanged suite, jQuery 1.7.2,
+the historical root-serving topology, a fresh headless browser context, Node
+22.15.1, and npm 10.9.2. The runtime versions describe the machine used for
+this observation; the repository's requested Node version remains 24.20.0.
+
+Chrome and Edge were controlled by Puppeteer over the Chrome DevTools
+Protocol. Firefox was controlled by Puppeteer's WebDriver BiDi support. The
+strict `npm test` path continued to require exactly 387 passing, 0 failing, 4
+pending, and 391 unique tests. The temporary `--observe-counts` path used for
+Firefox disabled only that exact-count comparison: normal Mocha completion,
+single execution, page/resource diagnostics, and other structural checks
+remained required.
+
+| Browser | Repetitions | Classification | Observed result |
+| --- | ---: | --- | --- |
+| Chrome for Testing 152.0.7977.75 | 1 reconfirmation | Observed passing; automated gate | 387 passing, 0 failing, 4 pending, and 391 unique tests; clean completion. |
+| Google Chrome Stable 152.0.7977.83 | 2 | Observed passing | Both runs produced 387/0/4 across 391 unique tests with clean completion. |
+| Microsoft Edge Stable 153.0.4234.32 | 2 | Observed passing | Both runs produced 387/0/4 across 391 unique tests with clean completion. |
+| Mozilla Firefox Stable 156.0 | 2, plus 1 diagnostic repetition | Observed failing/incomplete | Every run failed to complete. The first failure was the same `EventContext #partial()` timeout described below. |
+| Mozilla Firefox ESR 140.16.0esr | 2 | Observed failing/incomplete | Both runs reproduced the Stable result and failed to complete. |
+| Apple Safari on macOS | 0 | Unavailable | No Apple environment was available; real Safari remains an explicit verification gap. |
+
+### Firefox evidence and limits
+
+In both Firefox channels, the first meaningful failure was
+`EventContext #partial() passes the contents to the callback`: Mocha's
+four-second timeout expired although `GET /fixtures/partial.html` returned
+HTTP 200 and no required resource request failed. Later tests then produced
+secondary failures, and Mocha 1.0.1's HTML reporter threw while rendering
+them. The run never emitted normal completion.
+
+The compact diagnostic state was repeatable at the harness timeout: 135 pass
+events, 24 fail events, 4 pending events, and 161 observed Test objects. These
+are partial counts from an interrupted run, not a Firefox suite total. The
+controlled page recorded one `Runner.run()`; no runner re-entry was observed
+there before reporter corruption. No materially different repeated result was
+seen, so the outcome is classified as repeatable failure/incompletion rather
+than **observed unstable**.
+
+The automation transport originally exposed a separate harness limitation:
+Puppeteer's Firefox request object does not implement `resourceType()`. The
+harness now falls back to navigation and URL-path classification for that
+case. Once corrected, the Sammy/Mocha failure above remained reproducible.
+The evidence therefore should not be dismissed as that inspection error, but
+it also does not establish the root cause of the Firefox behavior. Production
+code, specs, fixtures, vendored dependencies, and `test/index.html` were not
+changed.
 
 ## Current Browser Release Policies
 
@@ -143,9 +195,12 @@ not permanent policy.
 | Environment | Status under the accepted target | Automated verification | Observed compatibility |
 | --- | --- | --- | --- |
 | Chrome for Testing 152.0.7977.75 | Inside the accepted Chrome window as of 2026-09-15. | Yes, through `npm test`. | 387 passing, 0 failing, 4 pending, 391 unique tests. |
-| Current/previous branded Chrome and current Extended Stable | Targeted. | No. | No repository-backed result recorded. |
-| Edge Stable / Extended Stable | Targeted. | No. | No repository-backed result recorded. |
-| Firefox Stable / ESR | Targeted. | No. | No repository-backed result recorded. |
+| Chrome Stable 152.0.7977.83 | Targeted. | No; ad hoc baseline only. | Two clean 387/0/4 runs across 391 unique tests. |
+| Other targeted Chrome Stable versions and Extended Stable | Targeted. | No. | No repository-backed result recorded. |
+| Edge Stable 153.0.4234.32 | Targeted. | No; ad hoc baseline only. | Two clean 387/0/4 runs across 391 unique tests. |
+| Other targeted Edge Stable versions and Extended Stable | Targeted. | No. | No repository-backed result recorded. |
+| Firefox Stable 156.0 / ESR 140.16.0esr | Targeted. | No; ad hoc baseline only. | Repeatable first timeout and incomplete suite in both channels; no valid final counts. |
+| Other targeted Firefox Stable / ESR versions | Targeted. | No. | No repository-backed result recorded. |
 | Safari on macOS | Targeted. | No. | No repository-backed result recorded. |
 | Playwright WebKit | Supplementary evidence only. | No. | No repository-backed result recorded. |
 
