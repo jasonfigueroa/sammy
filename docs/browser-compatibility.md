@@ -165,10 +165,75 @@ Puppeteer's Firefox request object does not implement `resourceType()`. The
 harness now falls back to navigation and URL-path classification for that
 case. Once corrected, the Sammy/Mocha failure above remained reproducible.
 The evidence therefore should not be dismissed as that inspection error, but
-it also does not establish the root cause of the Firefox behavior. Production
-code, specs, fixtures, vendored dependencies, and `test/index.html` were not
-changed. Root cause remains unresolved and is tracked in
+it did not establish the root cause of the Firefox behavior during the
+baseline work. Production code, specs, fixtures, vendored dependencies, and
+`test/index.html` were not changed. Follow-up diagnosis is tracked in
 [issue #21](https://github.com/jasonfigueroa/sammy/issues/21).
+
+### Firefox non-completion investigation
+
+#### Observed
+
+Follow-up diagnostics for issue #21 reproduced the timeout in headed Firefox
+Stable 156.0 and ESR 140.16.0esr without changing Sammy, the specs, fixtures,
+or vendored dependencies. The two known first-failure tests also passed when
+run individually. In the isolated `EventContext #partial()` case, the fixture
+returned HTTP 200, jQuery's ready-state handler and AJAX success callback each
+ran once, Sammy completed the render queue, the assertion and `done()` ran,
+and Mocha emitted one pass and one test-end event. The isolated chained-route
+case likewise received its fixture, entered jQuery's success callback, called
+the second route callback, and completed normally.
+
+The full-suite state was materially different. Earlier tests that verify
+Sammy ignores links and forms targeted at other windows leave auxiliary pages
+open. At the first `#partial()` timeout, three pages were present and the main
+test page reported `document.hidden === true`, `visibilityState === 'hidden'`,
+and no focus. Firefox Desktop imposes a one-second minimum timeout in inactive
+tabs
+([MDN `setTimeout()`](https://developer.mozilla.org/en-US/docs/Web/API/Window/setTimeout#timeouts_in_inactive_tabs)).
+That policy was directly visible in Sammy's `RenderContext` queue: successive
+`setTimeout(..., 0)` continuations arrived about one second apart. The fixture
+still returned 200 and jQuery success resumed the queue, but the user `.then()`
+callback containing the assertion and `done()` had not executed when Mocha's
+four-second timeout fired. The reporter failures remained later fallout.
+
+A diagnostic-only control closed the auxiliary target pages and returned the
+main page to the foreground after the target-window tests. Firefox Stable then
+completed with 387 passing, 0 failing, and 4 pending. Closing newly created
+auxiliary pages throughout the run produced the same 387/0/4 Mocha result in
+Firefox ESR. These controls did not change repository tests or production
+code and are evidence, not an adopted harness behavior.
+
+#### Inferred
+
+The alternate `Application #runRoute()` timeout appears related through the
+same hidden-page timing condition, but not through the same Sammy queue. Its
+isolated path completes after one `$.get()` callback calls `next()`; unlike
+`partial()`, it does not traverse the multi-step `RenderContext` timer chain.
+
+The strongest inference is therefore a test-environment interaction: target
+windows background the shared test page, Firefox throttles its asynchronous
+work, and legacy Mocha's fixed test deadlines expire. Confidence is high for
+the repeated `#partial()` timeout and moderate for the alternate chained-route
+timeout.
+
+#### Unresolved and follow-up
+
+The exact failed full-suite boundary for the intermittent chained-route
+variant remains unresolved. ESR also emitted two intermittent `Permission
+denied to access property "length"` page errors during some isolated and
+controlled runs, so its 387/0/4 control is not a clean compatibility
+certification.
+
+A separate Puppeteer/WebDriver BiDi problem was also observed: during this
+follow-up, current headless attempts in both Stable and ESR failed before
+navigation with a discarded browsing-context error, while headed sessions
+reached the suite. That transport failure is distinct from the in-page
+timeout. The appropriate
+follow-up is a small, separately reviewed policy for auxiliary test
+windows/focus plus investigation of the headless BiDi and ESR page-error
+limitations. Issue #22 may reuse this instrumentation, but Edge's CDP-based
+failure should not be assigned the same cause without its own evidence.
 
 ## Current Browser Release Policies
 
