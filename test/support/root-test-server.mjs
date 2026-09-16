@@ -79,16 +79,22 @@ export async function startRootTestServer() {
       writeResponse(response, status, headers, body);
     }
 
-    if (request.method !== 'GET' && request.method !== 'HEAD') {
-      finish(404, { 'Content-Type': 'text/plain' }, 'Not Found');
-      return;
-    }
-
     let pathname;
     try {
       pathname = decodeURIComponent(new URL(request.url, 'http://127.0.0.1').pathname);
     } catch {
       finish(400, { 'Content-Type': 'text/plain' }, 'Bad Request');
+      return;
+    }
+
+    if (pathname === '/__sammy_runner_isolation' &&
+        (request.method === 'GET' || request.method === 'POST')) {
+      finish(204, { 'Cache-Control': 'no-store' });
+      return;
+    }
+
+    if (request.method !== 'GET' && request.method !== 'HEAD') {
+      finish(404, { 'Content-Type': 'text/plain' }, 'Not Found');
       return;
     }
 

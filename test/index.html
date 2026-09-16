@@ -89,7 +89,41 @@
 
     <script>
       $(function() {
-        mocha.run();
+        var markerMatch = document.cookie.match(/(?:^|;\s*)sammy_legacy_harness=([^;]+)/),
+            marker = markerMatch ? decodeURIComponent(markerMatch[1]) : null,
+            automated = marker !== null,
+            admitted = !automated || window.__sammyLegacyHarnessMainToken === marker,
+            documentId = [new Date().getTime(), Math.random()].join('-');
+
+        window.__sammyLegacyRunnerAdmission = {
+          admitted: admitted,
+          automated: automated,
+          documentId: documentId
+        };
+
+        function reportIsolationEvent(eventName) {
+          var query = [
+                'event=' + encodeURIComponent(eventName),
+                'admitted=' + admitted,
+                'document=' + encodeURIComponent(documentId),
+                'name=' + encodeURIComponent(window.name || ''),
+                'href=' + encodeURIComponent(window.location.href)
+              ].join('&'),
+              url = '/__sammy_runner_isolation?' + query,
+              image;
+
+          if (navigator.sendBeacon && navigator.sendBeacon(url)) { return; }
+          image = new Image();
+          image.src = url;
+          window.__sammyRunnerIsolationRequests =
+            (window.__sammyRunnerIsolationRequests || []).concat(image);
+        }
+
+        if (automated) { reportIsolationEvent('admission'); }
+        if (admitted) {
+          if (automated) { reportIsolationEvent('runner-start'); }
+          mocha.run();
+        }
       });
     </script>
   </head>

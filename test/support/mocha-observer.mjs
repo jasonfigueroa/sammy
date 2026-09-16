@@ -6,6 +6,10 @@ export function installMochaObserver() {
     callbackInvoked: false,
     completed: false,
     events: [],
+    isolationBodyChecks: {
+      checks: 0,
+      failures: []
+    },
     nextTestId: 1,
     runnerRuns: 0,
     tests: {}
@@ -81,6 +85,16 @@ export function installMochaObserver() {
         if (this.type === 'test') {
           const details = testDetails(this);
           details.record.bodyRuns += 1;
+
+          const isolation = window.__sammyAuxiliaryIsolationState;
+          const barrier = isolation && isolation.lastBarrier;
+          state.isolationBodyChecks.checks += 1;
+          if (!barrier || barrier.mainVerified !== true || barrier.pageCount !== 1) {
+            state.isolationBodyChecks.failures.push({
+              barrier,
+              fullTitle: details.record.fullTitle
+            });
+          }
         }
         return originalRunnableRun.call(this, callback);
       };
