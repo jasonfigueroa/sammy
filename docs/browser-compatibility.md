@@ -235,6 +235,28 @@ windows/focus plus investigation of the headless BiDi and ESR page-error
 limitations. Issue #22 may reuse this instrumentation, but Edge's CDP-based
 failure should not be assigned the same cause without its own evidence.
 
+### Auxiliary-window isolation validation
+
+Issue #23 implemented the separately reviewed cleanup policy on 2026-09-16.
+The harness now admits Mocha only in the exact designated main page, closes
+other top-level pages continuously, and runs an awaited isolation and
+foreground barrier before each test body.
+
+With that policy in place and using the repository-pinned Node 24.20.0,
+Firefox Stable 156.0 completed once headless and once headed, and Firefox ESR
+140.16.0esr completed twice headed. Every run reported 387 passing, 0 failing,
+4 pending, and 391 unique tests, with one runner start, two auxiliary pages
+closed, 387 completed barriers, one final main page, and no page or
+required-resource errors. Two strict Chrome 152 runs retained the same counts
+and isolation invariants.
+
+This supersedes the earlier non-completion result for the adopted harness
+configuration. It supports the issue #21 conclusion that leaked target
+windows caused the observed Firefox timing failure. It does not close the
+separate issue #24 investigation: the successful Firefox observations are a
+limited validation set, not a general conclusion about all Puppeteer
+WebDriver BiDi behavior.
+
 ## Current Browser Release Policies
 
 The following facts are time-sensitive and were checked on 2026-09-15 against
@@ -306,7 +328,7 @@ not permanent policy.
 | Other targeted Chrome Stable versions and Extended Stable | Targeted. | No. | No repository-backed result recorded. |
 | Edge Stable 153.0.4234.32 | Targeted. | No; ad hoc baseline only. | Observed unstable: one clean 387/0/4 run and one incomplete run after an asynchronous timeout. |
 | Other targeted Edge Stable versions and Extended Stable | Targeted. | No. | No repository-backed result recorded. |
-| Firefox Stable 156.0 / ESR 140.16.0esr | Targeted. | No; ad hoc baseline only. | Both channels failed to complete; Stable's first timeout varied, while ESR's repeated. No valid final counts. |
+| Firefox Stable 156.0 / ESR 140.16.0esr | Targeted. | No; ad hoc validation only. | With issue #23's auxiliary-window isolation, Stable completed headless and headed and ESR completed twice headed at 387/0/4 across 391 tests. Earlier runs without adopted cleanup did not complete. |
 | Other targeted Firefox Stable / ESR versions | Targeted. | No. | No repository-backed result recorded. |
 | Safari on macOS | Targeted. | No. | No repository-backed result recorded. |
 | Playwright WebKit | Supplementary evidence only. | No. | No repository-backed result recorded. |
